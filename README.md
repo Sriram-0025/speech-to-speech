@@ -52,7 +52,7 @@ Output**:
 
 ```bash
 git clone https://github.com/Sriram-0025/speech-to-speech.git
-cd tamil-english-speech-translator
+cd speech-to-speech
 ```
 
 2. Install Dependencies
