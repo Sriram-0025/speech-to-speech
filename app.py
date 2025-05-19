@@ -1,68 +1,60 @@
 import speech_recognition as sr
-from googletrans import Translator
 from gtts import gTTS
-from pydub import AudioSegment
-import os
+from deep_translator import GoogleTranslator
+import gradio as gr
+import tempfile
 
 def recognize_speech_from_audio(file_path, source_lang="ta-IN"):
-    """Converts speech to text using Google Speech Recognition."""
     recognizer = sr.Recognizer()
     with sr.AudioFile(file_path) as source:
-        print("[INFO] Listening to audio...")
         audio = recognizer.record(source)
-
     try:
-        print("[INFO] Recognizing speech...")
-        text = recognizer.recognize_google(audio, language=source_lang)
-        print("[INFO] Recognized Text:", text)
-        return text
+        return recognizer.recognize_google(audio, language=source_lang)
     except sr.UnknownValueError:
-        print("[ERROR] Could not understand the audio.")
-        return ""
+        return "[Could not understand the audio]"
     except sr.RequestError as e:
-        print(f"[ERROR] Google Speech API error: {e}")
-        return ""
+        return f"[Google API error: {e}]"
 
 def translate_text(text, src='ta', dest='en'):
-    """Translate the text to another language using Google Translate."""
-    if not text:
-        return ""
-    print("[INFO] Translating text...")
-    translator = Translator()
     try:
-        translated = translator.translate(text, src=src, dest=dest)
-        print("[INFO] Translated Text:", translated.text)
-        return translated.text
+        translated = GoogleTranslator(source=src, target=dest).translate(text)
+        return translated
     except Exception as e:
-        print(f"[ERROR] Translation failed: {e}")
-        return ""
+        print("Translation error:", e)
+        return "[Translation failed]"
 
-def text_to_speech(text, output_path, lang='en'):
-    """Converts translated text to speech and saves it."""
+def text_to_speech(text, lang='en'):
     if not text:
-        print("[ERROR] No text to convert to speech.")
-        return
-    print("[INFO] Converting text to speech...")
+        return None
     try:
         tts = gTTS(text=text, lang=lang)
-        tts.save(output_path)
-        print(f"[INFO] Saved output audio to {output_path}")
+        temp_mp3 = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
+        tts.save(temp_mp3.name)
+        return temp_mp3.name
     except Exception as e:
-        print(f"[ERROR] TTS failed: {e}")
+        print("TTS error:", e)
+        return None
 
-def main():
-    input_audio = "/content/drive/MyDrive/T & s/generated-audio.wav" 
-    output_audio = "output_audio.mp3"   
+def process_audio(audio):
+    # audio is a dict with 'name' key (from gr.Audio with type="filepath")
+    temp_wav_path = audio
+    tamil_text = recognize_speech_from_audio(temp_wav_path)
+    english_text = translate_text(tamil_text)
+    english_audio_path = text_to_speech(english_text)
 
-    tamil_text = recognize_speech_from_audio(input_audio)
+    return english_audio_path, tamil_text, english_text
 
-    english_text = translate_text(tamil_text, src='ta', dest='en')
-
-    text_to_speech(english_text, output_audio, lang='en')
-
-    print("[INFO] Playing output audio...")
-    AudioSegment.from_mp3(output_audio).export("output_audio.wav", format="wav")
-    os.system("start output_audio.wav") 
+interface = gr.Interface(
+    fn=process_audio,
+    inputs=gr.Audio(type="filepath", label="Upload Tamil Audio (.wav)"),
+    outputs=[
+        gr.Audio(type="filepath", label="Translated English Audio"),
+        gr.Textbox(label="Tamil Text"),
+        gr.Textbox(label="English Translation")
+    ],
+    title="Speech-to-Speech Translator (Tamil ➜ English)",
+    description="Upload a Tamil .wav audio file. It will be transcribed, translated, and converted into English audio."
+)
 
 if __name__ == "__main__":
-    main()
+    interface.launch()
